@@ -1,0 +1,153 @@
+---
+title: "Lab Exercise 1"
+author: "Priyanka Verma"
+date: today
+date-format: "DD/MM/YY"
+format: 
+    pdf:
+      toc: true
+---
+
+<!-- ## Shiny Documents -->
+
+<!-- This Quarto document is made interactive using Shiny. Interactive documents allow readers to modify parameters and see the results immediately. Learn more about Shiny interactive documents at <https://quarto.org/docs/interactive/shiny/>. -->
+
+<!-- ## Inputs and Outputs -->
+
+<!-- <!-- You can embed Shiny inputs and outputs in your document. Outputs are automatically updated whenever inputs change. This demonstrates how a standard R plot can be made interactive: -->
+
+<!-- ```{r} --> <!-- sliderInput("bins", "Number of bins:",  --> <!--             min = 1, max = 50, value = 30) --> <!-- plotOutput("distPlot") --> <!-- ``` -->
+
+<!-- ```{r} -->
+
+<!-- #| context: server -->
+
+<!-- output$distPlot <- renderPlot({ -->
+
+<!--    x <- faithful[, 2]  # Old Faithful Geyser data -->
+
+<!--    bins <- seq(min(x), max(x), length.out = input$bins + 1) -->
+
+<!--    hist(x, breaks = bins, col = 'darkgray', border = 'white', -->
+
+<!--         xlab = 'Waiting time to next eruption (in mins)', -->
+
+<!--         main = 'Histogram of waiting times') -->
+
+<!-- }) -->
+
+<!-- ``` -->
+
+```{r}
+#install.packages("tidyverse")
+library(tidyverse)
+#library(ggplot2)
+```
+
+### Read Data
+
+```{r}
+dm <- read_table("https://www.prdh.umontreal.ca/BDLC/data/ont/Mx_1x1.txt", skip = 2, col_types = "dcddd")
+head(dm)
+```
+
+### Q1
+
+Plot the ratio of male to female mortality rates over time for ages 10,20,30 and 40 (different color for each age) and change the theme
+
+```{r}
+d_1 <- dm |> 
+  filter(Age==30 | Age==40 | Age==10 | Age==20 ) |>
+  mutate(mf_ratio = Male/Female) |> 
+  select(Year, Age, mf_ratio)
+d_1
+```
+
+```{r}
+d_1 |> 
+  ggplot(aes(x=Year, y=mf_ratio, color= Age)) +
+  geom_line()+
+  ylab("Ratio male to female mortality rate") +
+  ggtitle("Ratio of male to female mortality rates over time")+
+  theme_light() #change of theme 
+
+```
+
+### Q2
+
+Find the age that has the highest female mortality rate each year
+
+```{r}
+d_2 <- dm |> 
+  select(Year, Age, Female) |>
+  group_by(Year) |>
+  mutate(maxF = max(Female, na.rm = TRUE)) |>
+  group_by(Year) |>
+  filter(Female == maxF) |>
+  select(Year, Age, Female) # prints the Age along with the value of the highest Female mortality rate for each year
+d_2
+```
+
+### Q3
+
+Use the `summarize(across())` syntax to calculate the standard deviation of mortality rates by age for the Male, Female and Total populations.
+
+```{r}
+d_3 <- dm  |>
+  group_by(Age) |> 
+  summarize(across(Female:Total, sd))
+d_3
+```
+
+### Q4
+
+The Canadian HMD also provides population sizes over time (https://www.prdh.umontreal.ca/BDLC/data/ont/Population.txt). Use these to calculate the population weighted average mortality rate separately for males and females, for every year. Make a nice line plot showing the result (with meaningful labels/titles) and briefly comment on what you see (1 sentence). Hint: `left_join` will probably be useful here.
+
+```{r}
+dp <- read_table("https://www.prdh.umontreal.ca/BDLC/data/ont/Population.txt", skip = 2, col_types = "dcddd")
+head(dp)
+```
+
+```{r}
+df_join <- merge(x = dm, y = dp, by = c("Year", "Age"), all.x = TRUE)
+colnames(df_join) <- c("Year","Age","Female_m", "Male_m", "Total_m","Female_p","Male_p","Total_p")
+
+df_join <- df_join |> 
+  select(-c("Total_m", "Total_p")) # remove the total mortality and total population columns  
+```
+
+```{r}
+df_join <- df_join |> 
+  group_by(Year) |>
+  mutate(total_f = sum(Female_p, na.rm = TRUE)) |>
+  mutate(total_m = sum(Male_p, na.rm = TRUE))
+```
+
+```{r}
+df_join <- df_join |>
+  mutate(w_f= Female_m * Female_p/total_f) |>
+  mutate(w_m = Male_m * Male_p/total_m)
+```
+
+```{r}
+df_avg <- df_join |>
+  group_by(Year) |>
+  summarise(female = sum(w_f, na.rm = TRUE), male = sum(w_m, na.rm = TRUE))
+```
+
+```{r}
+d_plot <- df_avg |> 
+  pivot_longer(female:male, names_to = "Sex", values_to = "weighted_avg")
+```
+
+```{r}
+p1 <- d_plot |> 
+  ggplot(aes(x=Year, y=weighted_avg, color= Sex)) +
+  geom_line()+
+  ggtitle("Population weighted average mortality rate for males and females")+
+  ylab("Population weighted average mortality rate") + 
+  theme_light() #change of theme 
+p1
+```
+Interpretation: 
+The population weighted average mortality rate decreases and then increases for both females and males. 
