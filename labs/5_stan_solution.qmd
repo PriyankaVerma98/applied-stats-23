@@ -1,0 +1,378 @@
+---
+title: "Priyanka_Verma: Bayesian linear regression and introduction to Stan"
+date: today
+date-format: "DD/MM/YY"
+format: pdf
+execute: 
+  warning: false
+  message: false
+---
+
+# Introduction
+
+Looking at the kid's test score data set (available in resources for the [Gelman Hill textbook](https://mc-stan.org/rstanarm/reference/rstanarm-datasets.html)).
+
+```{r, include=FALSE}
+library(tidyverse)
+library(rstan)
+library(tidybayes)
+library(here)
+
+#remove.packages("dplyr")
+#install.packages("dplyr")
+#library(dplyr)
+```
+
+The data look like this:
+
+```{r}
+kidiq <- read_rds(here("/Users/vermap/Desktop/STA-2201/applied-stats-23/data","kidiq.RDS"))
+kidiq
+```
+
+As well as the kid's test scores, we have a binary variable indicating whether or not the mother completed high school, the mother's IQ and age.
+
+# Descriptives
+
+## Question 1
+
+Use plots or tables to show three interesting observations about the data.
+
+-   We can see the summary of all the variables. It gives us the idea about the range of values and average values of different variables.
+
+```{r}
+summary(kidiq)
+```
+
+-   The box plot (Fig.1) shows the range of values of kids iq score with variation in mother's high school education.
+
+```{r,echo=FALSE, results='hide',message=FALSE, warning=FALSE,}
+ggplot(data= kidiq, aes( y= kid_score, fill= factor(mom_hs))) + 
+    geom_boxplot() +
+    labs(y = "kid IQ score", title = "Fig. 1") +
+    theme_minimal()
+```
+
+-   The average of kids iq score is higher when mom has high school education.
+-   There is a possible outlier value of kid's iq score (144), however on further looking at the data it does not look unexpected as it is associated with a high mom iq (132). It is interesting to note that the kid has a higher iq score than their mother.
+
+The plot (Fig. 2) shows kids' iq with mothers' iq and its variation by mom high school education.
+```{r,echo=FALSE, warning=FALSE}
+ggplot(data= kidiq, aes(x= mom_iq , y= kid_score, color= factor(mom_hs))) +
+    geom_point()+
+    geom_smooth(method=lm, se=TRUE) +
+    labs(y = "Kid IQ", x="Mom IQ", title = "Fig. 2") +
+  #xlim(0,140) +
+  #ylim(0,150)+
+    theme_minimal()
+```
+
+-   The slopes of the regression of child's test score on mother's IQ differs substantially across subgroups defined by mother's high school completion.
+
+# Estimating mean, no covariates
+
+```{=html}
+<!--In class we were trying to estimate the mean and standard deviation of the kid's test scores. The `kids2.stan` file contains a Stan model to do this. If you look at it, you will notice the first `data` chunk lists some inputs that we have to define: the outcome variable `y`, number of observations `N`, and the mean and standard deviation of the prior on `mu`. Let's define all these values in a `data` list.
+-->
+```
+```{r}
+y <- kidiq$kid_score
+mu0 <- 80
+sigma0 <- 10
+
+# named list to input for stan function
+data <- list(y = y, 
+             N = length(y), 
+             mu0 = mu0,
+             sigma0 = sigma0)
+```
+
+```{r,include=FALSE}
+fit <- stan(file = here("code/models/kids2.stan"),
+            data = data,
+            chains = 3,
+            iter = 500)
+```
+
+Look at the summary
+
+```{r}
+fit
+```
+
+Traceplot
+
+```{r}
+traceplot(fit)
+```
+
+All looks fine.
+
+```{r, warning=FALSE}
+pairs(fit, pars = c("mu", "sigma"))
+```
+
+```{r}
+stan_dens(fit, separate_chains = TRUE)
+```
+
+## Understanding output
+
+<!--What does the model actually give us? A number of samples from the posteriors. To see this, we can use `extract` to get the samples.
+-->
+```{r,echo=FALSE}
+post_samples <- extract(fit)
+head(post_samples[["mu"]])
+```
+
+<!--This is a list, and in this case, each element of the list has 4000 samples. E.g. quickly plot a histogram of mu
+-->
+```{r, echo=FALSE}
+hist(post_samples[["mu"]])
+median(post_samples[["mu"]])
+# 95% bayesian credible interval
+quantile(post_samples[["mu"]], 0.025)
+quantile(post_samples[["mu"]], 0.975)
+```
+
+## Plot estimates
+
+<!--There are a bunch of packages, built-in functions that let you plot the estimates from the model, and I encourage you to explore these options (particularly in `bayesplot`, which we will most likely be using later on). I like using the `tidybayes` package, which allows us to easily get the posterior samples in a tidy format (e.g. using gather draws to get in long format). Once we have that, it's easy to just pipe and do ggplots as usual.-->
+
+<!--Get the posterior samples for mu and sigma in long format:
+-->
+```{r, echo=FALSE}
+dsamples <- fit  |> 
+  gather_draws(mu, sigma) # gather = long format
+dsamples
+
+# wide format
+fit  |>  spread_draws(mu, sigma)
+
+# quickly calculate the quantiles using 
+
+dsamples |> 
+  median_qi(.width = 0.8)
+```
+
+Let's plot the density of the posterior samples for mu and add in the prior distribution
+```{r, echo=FALSE}
+dsamples |> 
+  filter(.variable == "mu") |> 
+  ggplot(aes(.value, color = "posterior")) + geom_density(size = 1) + 
+  xlim(c(70, 100)) + 
+  stat_function(fun = dnorm, 
+        args = list(mean = mu0, 
+                    sd = sigma0), 
+        aes(colour = 'prior'), size = 1) +
+  scale_color_manual(name = "", values = c("prior" = "red", "posterior" = "black")) + 
+  ggtitle("Prior and posterior for mean test scores") + 
+  xlab("score")
+  
+```
+
+## Question 2
+
+Change the prior to be much more informative (by changing the standard deviation to be 0.1). Rerun the model. Do the estimates change? Plot the prior and posterior densities.
+
+```{r}
+y <- kidiq$kid_score
+
+mu0 <- 80
+sigma0 <- 0.1
+
+# named list to input for stan function
+data <- list(y = y, 
+             N = length(y), 
+             mu0 = mu0,
+             sigma0 = sigma0)
+```
+
+```{r,include=FALSE}
+fit <- stan(file = here("code/models/kids2.stan"),
+            data = data,
+            chains = 3,
+            iter = 500)
+```
+
+```{r}
+fit
+```
+
+yes, the output estimates have changed from mu= 86.76 to mu= 80.06 and sigma from 20.39 to 21.44. This is intuitive because our estimates are influenced primarily by the priors, rather than the data, because we have set sigma0 as 0.1- meaning that we are confident in our priors more than the data.
+
+```{r}
+traceplot(fit)
+```
+
+```{r, warning=FALSE}
+pairs(fit, pars = c("mu", "sigma"))
+```
+
+```{r}
+stan_dens(fit, separate_chains = TRUE)
+```
+
+# Adding covariates
+
+Now let's see how kid's test scores are related to mother's education. We want to run the simple linear regression
+
+$$
+Score = \alpha + \beta X
+$$ where $X = 1$ if the mother finished high school and zero otherwise.
+
+`kid3.stan` has the stan model to do this. Notice now we have some inputs related to the design matrix $X$ and the number of covariates (in this case, it's just 1).
+
+```{r,include=FALSE, warning=FALSE, message=FALSE}
+X <- as.matrix(kidiq$mom_hs, ncol = 1) # force this to be a matrix
+K <- 1 # number of covariates
+
+data <- list(y = y, N = length(y), 
+             X =X, K = K)
+fit2 <- stan(file = here("code/models/kids3.stan"),
+            data = data, 
+            iter = 1000)
+```
+
+```{r}
+post_samples <- extract(fit2)
+names(post_samples)
+dsamples <- fit2  |> 
+  gather_draws(alpha, beta[], sigma) # gather = long format
+dsamples
+
+
+# wide format
+#fit  |>  spread_draws(mu, sigma)
+
+# quickly calculate the quantiles using 
+
+dsamples |> 
+  median_qi(.width = 0.8)
+
+
+```
+
+## Question 3
+
+a)  Confirm that the estimates of the intercept and slope are comparable to results from `lm()`
+
+```{r,echo=FALSE}
+summary(fit2)$summary[c("alpha", "beta[1]"),]
+summary(lm(kid_score~mom_hs, data = kidiq))
+```
+
+-   Yes, the coefficients are comparable.
+
+b)  Do a `pairs` plot to investigate the joint sample distributions of the slope and intercept. Comment briefly on what you see. Is this potentially a problem?
+
+```{r, echo=FALSE}
+pairs(fit2, pars = c("alpha", "beta[1]"))
+```
+
+Yes, it is a problem as the joint distribution is narrow. It causes issues in our generating sample of alpha, beta values as it does not efficiently cover the sample space properly, because of the constraints of narrow line.
+
+## Plotting results
+
+It might be nice to plot the posterior samples of the estimates for the non-high-school and high-school mothered kids. Here's some code that does this: notice the `beta[condition]` syntax. Also notice I'm using `spread_draws`, because it's easier to calculate the estimated effects in wide format
+
+```{r}
+fit2 |>
+  spread_draws(alpha, beta[k], sigma) |> 
+     mutate(nhs = alpha, # no high school is just the intercept
+          hs = alpha + beta) |> 
+  select(nhs, hs) |> 
+  pivot_longer(nhs:hs, names_to = "education", values_to = "estimated_score") |> 
+  ggplot(aes(y = education, x = estimated_score)) +
+  stat_halfeye() + 
+  theme_bw() + 
+  ggtitle("Posterior estimates of scores by education level of mother")
+  
+```
+
+-- posterior distribution is much higher.
+
+## Question 4
+
+Add in mother's IQ as a covariate and rerun the model. Please mean center the covariate before putting it into the model. Interpret the coefficient on the (centered) mum's IQ.
+
+```{r}
+y <- kidiq$kid_score
+dfx <- kidiq[,2:3]
+dfx['mom_iq_cent'] <- dfx$mom_iq- mean(dfx$mom_iq)
+dfx <- dfx |> select(-c('mom_iq'))
+
+# named list to input for stan function
+dataQ4 <- list(y = y, 
+             N = length(y), 
+             K = 2,
+             X = as.matrix(dfx,ncol = 2),
+             sigma0 = sigma0)
+```
+
+```{r,include=FALSE}
+fitQ4 <- stan(file = here("code/models/kids3.stan"),
+            data = dataQ4,
+            chains = 3,
+            iter = 500)
+```
+
+```{r, echo=FALSE}
+#post_samples <- extract(fitQ4)
+#names(extract(fitQ4))
+summary(fitQ4)$summary[c("alpha", "beta[1]", "beta[2]"),]
+```
+
+-   Intercept value is 82.29. It means that if a mother has mean iq level and does not have high school degree then the iq score of kid would be 82.29.
+
+-   beta\[1\] is the coefficient of mom's high school education. The coefficient estimate of 5.74 means that the kids' iq score changes by 5.74 for mothers who differed in high school degree completion for the same iq level of mother.
+
+-   beta\[2\] is the coefficient of mom's iq. The coefficient estimate of 0.57 means that on comparing children with the same value of mom's high school education, but whose mothers differ by 1 point in IQ, we would expect to see a difference of 0.57 points in the child's test score.
+
+## Question 5
+
+Confirm the results from Stan agree with `lm()`
+
+```{r, echo=FALSE}
+summary(lm(kid_score~mom_hs+ mom_iq, data = kidiq))
+```
+
+-   the estimates of beta\[1\] and beta\[2\] are comparable with lm().
+-   the estimate of the intercept differs by beta\[2\]\*mean(kidiq\$mom_iq), which is expected as the values of mom's iq are not centered around the average in the linear model.
+
+```{r, echo=FALSE}
+diff <- 0.56391 * mean(kidiq$mom_iq)
+print(diff)
+```
+
+## Question 6
+
+Plot the posterior estimates of scores by education of mother for mothers who have an IQ of 110.
+
+```{r, echo=FALSE}
+
+post_samples <- extract(fitQ4)
+names(post_samples)
+
+alpha <- post_samples[["alpha"]] 
+beta1 <- post_samples[["beta"]][,1]
+beta2 <- post_samples[["beta"]][,2]
+lin_pred <- alpha + beta2*110
+lin_pred_hs <- alpha + beta2*110 + beta1*1
+hist(lin_pred, xlab = "estimated_score", main = "Posterior estimate of score when mother does not have high school degree")
+hist(lin_pred_hs, xlab = "estimated_score", main = "Posterior estimate of score when mother has high school degree")
+```
+
+## Question 7
+
+Generate and plot (as a histogram) samples from the posterior predictive distribution for a new kid with a mother who graduated high school and has an IQ of 95.
+
+```{r, echo=FALSE}
+sigma_est <- post_samples[["sigma"]]
+alpha <- post_samples[["alpha"]] 
+beta1 <- post_samples[["beta"]][,1]
+beta2 <- post_samples[["beta"]][,2]
+lin_pred <- alpha + beta2*95 + beta1*1
+y_new <- rnorm(n = length(sigma_est),mean = lin_pred, sd = sigma_est)
+hist(y_new,xlab = "estimated_score", main = "Posterior predictive distribution of score when mother has high school degree and IQ=95" )
+```
