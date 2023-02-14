@@ -1,0 +1,555 @@
+---
+title: "PriyankaVerma-assignment1-solution"
+format: pdf
+editor: visual
+output: 
+  pdf_document:
+    number_sections: true
+fontsize: 11pt
+---
+
+```{r,  include=FALSE}
+#| echo: false
+#| ## Importing Libraries
+library(tidyverse)
+library("readxl")
+library(ggrepel)
+library(janitor)
+library(MASS)
+```
+
+# Q1 Overdispersion
+
+Suppose that the conditional distribution of outcome $Y$ given an unobserved variable $\theta$ is Poisson, with a mean and variance $\mu\theta$, so
+
+$$
+Y|\theta \sim  \text{Poisson}(\mu\theta)
+$$
+
+### a) Assume $E(\theta) = 1$ and $Var(\theta) = \sigma^2$. Using the laws of total expectation and total variance, show $E(Y) = \mu$ and $Var(Y) = \mu (1+ \mu\sigma^2)$.
+
+$$E[𝑌] = E[E[Y|\theta]] ~~~~{-Law ~~ of ~~ total ~~ expectation} $$
+
+$$ = E[E[\frac{e^{-(\mu\theta)} (\mu\theta)^y} {y!} ]] $$
+
+$$= E[\mu\theta] $$
+
+$$ = \mu E[\theta] $$
+
+$$ = \mu $$
+
+$$
+Var[Y] = 𝐸[𝑉ar [𝑌 |\theta]] + 𝑉ar[𝐸[𝑌 |\theta]]  \space \space \space  {-Law ~~ of ~~ total ~~ variance}
+$$
+
+$$
+= E[\mu \theta] + Var[\mu \theta]
+$$
+
+$$
+= \mu E[\theta] + \mu Var[ \theta]
+$$
+
+$$ = \mu + \mu \sigma^2 $$
+
+$$ = \mu (1 + \sigma^2) $$
+
+### b) Assume $\theta$ is Gamma distributed with $\alpha$ and $\beta$ as shape and scale parameters, respectively. Show the unconditional distribution of $Y$ is Negative Binomial.
+
+$$
+p(y) = p(y|\theta)p(\theta) d\theta 
+$$
+
+$$ 
+=\int \frac{e^{-(\mu\theta)}(\mu\theta)^y}{y!}* \frac{\theta^{\alpha-1}e^{-\frac{\theta}{\beta}}}{\beta^{\alpha}\Gamma(\alpha)} d\theta
+$$
+
+$$
+= \frac{\mu^y}{y!\beta^{\alpha}\Gamma(\alpha)} \int e^{-\theta(\mu+\frac{1}{\beta})}\theta^{(y+\alpha-1)} d\theta \\ 
+$$
+
+$$
+= \frac{\mu^y}{y!\beta^{\alpha}\Gamma(\alpha)} \frac{\Gamma(\alpha+y)}{\biggl(\frac{\beta\mu+1}{\beta}\biggl)^{\alpha+y}}
+\int \frac{\biggl(\frac{\beta\mu+1}{\beta}\biggl)^{\alpha+y}}{\Gamma(\alpha+y)}e^{-(\frac{\beta\mu+1}{\beta})\theta}\theta^{y+\alpha-1}d\theta
+$$
+
+$$
+= \frac{\mu^y}{y!\beta^{\alpha}\Gamma(\alpha)} \frac{\Gamma(\alpha+y)\beta^{\alpha+y}}{(\beta\mu+1)^{\alpha+y}}
+$$
+
+$$
+=\frac {\Gamma(\alpha+y)}{\Gamma(\alpha)\Gamma(y+1)} \frac{\mu^y\beta^y}{(\beta\mu+1)^{\alpha+y}}
+$$
+
+$$
+= \frac {\Gamma(\alpha+y)}{\Gamma(\alpha)\Gamma(y+1)} \biggl(\frac{\beta\mu}{\beta\mu+1}\biggr)^y \biggl(\frac{1}{\beta\mu+1}\biggr)^\alpha
+$$
+
+$$
+=NB(\alpha, 1/(\beta\mu+1)) 
+$$
+
+Hence, this is a negative binomial distribution.
+
+## c) In order for $E(Y) = \mu$ and $Var(Y) = \mu (1+ \mu\sigma^2)$, what must $\alpha$ and $\beta$ equal?
+
+For a Gamma distribution with parameters $\alpha$ and $\beta$, for a random variable X with this distribution, $E(X) = \alpha\beta$ and $Var[X] = \alpha\beta^2$. Proof:
+
+$$
+E[X^a] = \int \frac{x^{a+\alpha-1} e^{-x/\beta}}{\beta^\alpha \Gamma{(\alpha)}} dx
+$$
+
+$$
+= \frac{\beta^a}{\Gamma{(\alpha})} \int (\frac{x}{\beta})^{a+\alpha−1} e^{(-x/\beta)} 𝑑𝑥
+$$
+
+$$
+= \frac{\beta^a}{\Gamma{(\alpha})}{\Gamma{(a+\alpha})}
+$$
+
+$$
+E[X] = \frac{\beta}{\Gamma(\alpha)}\alpha \Gamma(\alpha)
+= \beta \alpha 
+$$
+
+Proof for variance-
+
+$$
+E[X^2] = \beta^2 \frac{\Gamma(2+\alpha)} {\Gamma(\alpha)}
+$$
+
+$$
+ = \beta^2 \alpha (\alpha+1)
+$$
+
+$$
+Var[X] = E[X^2] - E[X]^2
+= \beta^2 \alpha (\alpha+1) - \alpha ^2 \beta^2 = \beta^2 \alpha 
+$$
+
+Using part (a) we know that $E[Y]=\mu E[\theta]$. Therefore, combining it with the results of gamma distribution:
+
+$$
+E[Y] =\mu E[\theta] = \mu\alpha\beta = \mu 
+$$
+
+$$ 
+ => \alpha \beta = 1
+$$
+
+$$
+Var[Y] = \mu E[\theta] + Var[ \mu \theta] = \mu E[\theta] + \mu^2 Var[\theta]
+$$
+
+$$
+= \mu \alpha \beta + \alpha \mu^2 \beta^2
+= \alpha \mu \beta (1+ \mu \beta) 
+$$
+
+$$
+\alpha \beta (1+ \mu \beta)  = (1 + \mu \sigma^2)
+$$
+
+using $\alpha\beta = 1$, we get- $$
+(1+ \mu \beta) =  (1 + \mu \sigma^2)
+$$
+
+$$
+=> \beta = \sigma^2
+$$
+
+$$
+=> \alpha = 1/\sigma^2
+$$
+
+\newpage
+
+# Q2 Hurricanes
+
+```{r, include=FALSE}
+my_data <- read_excel("data-assg1.xlsx", sheet = 1)
+```
+
+```{r, include=FALSE}
+get_dupes(my_data) # no_duplicates
+df <- my_data[-(93:nrow(my_data)), ] #remove the last rows of notes
+```
+
+#### a) Create three graphs in ggplot that help to visualize patterns in deaths by femininity, minimum pressure, and damage. Discuss what you observe based on your visualizations.
+
+-   The distribution of deaths is left skewed and not-normally distributed. Most of the deaths caused by hurricanes are under 80.
+
+```{r, echo=FALSE, results='hide',message=FALSE, warning=FALSE, fig.show='hide'}
+ggplot(data= df) + 
+  geom_histogram(aes(x = alldeaths), position = position_dodge()) +theme_light() +
+  labs(title = "histogram of all deaths")
+```
+
+-   The plot of death by femininity shows that the median deaths is same for both Masculine and Feminine hurricanes, however the feminine classified hurricanes have higher IQR and more outliers that have caused great number of deaths.
+
+-   The plot of death by normalised damage shows a positive correlation between deaths and normalised damage overall. The pattern exists individually too for both feminine- and masculine- classified hurricanes. We can also see that for hurricanes lower in normalized damage the death toll is similar for both masculine-named and feminine named hurricanes, whereas for hurricanes higher in normalized damage hurricanes with feminine names caused more deaths than those with masculine names.
+
+-   The plot of death by minimum pressure shows a negative correlation between deaths and normalised damage overall. The pattern exists individually too for both feminine- and masculine- classified hurricanes.
+
+```{r,echo=FALSE, results='hide',message=FALSE, warning=FALSE,}
+ggplot(data= df, aes( y= alldeaths, fill= factor(df$Gender_MF))) + 
+    geom_boxplot() +
+    labs(y = "deaths", title = "Plot 1 of deaths factored by femininity") +
+    theme_minimal()
+
+ggplot(data= df, aes(x= NDAM , y= alldeaths, color= factor(df$Gender_MF))) +
+    geom_point()+
+    geom_smooth() +
+    labs(y = "deaths", x="Normalised Damage", title = "Deaths by damage") +
+    theme_minimal()
+
+ggplot(data= df, aes(x= df$`Minpressure_Updated 2014`, y= alldeaths,  color= factor(df$Gender_MF) )) + 
+    geom_point()+
+    geom_smooth() +
+    labs(y = "deaths", x="MinimumPressure", title = "Deaths by minimum pressure") +
+    theme_minimal()
+
+```
+
+#### b) Run a Poisson regression with deaths as the outcome and femininity as the explanatory variable.
+
+**Interpretation of the resulting coefficient estimates** For the poisson regression model, we note that femininity is statistically significant predictor with a p value less than 0.05. The intercept means that if the femininity of a hurricane is 0 then it would cause deaths of log (2.500370). Further, one unit change in feminine hurricanes has 1- exp(0.0738) = 7% more chance of causing deaths.
+
+```{r,echo=FALSE}
+mod1 <- glm(alldeaths~MasFem,family=poisson,data=df)
+summary(mod1)
+```
+
+**check for overdispersion** - Null Hypthesis: the overdispersion is zero
+
+```{r,message=FALSE}
+n = dim(df)[1] #119
+k = length(mod1$coefficients) # k=3
+sum(rstandard(mod1)^2)/(n-k) # overdispersion factor 
+1- pchisq(sum(rstandard(mod1)^2), n-k) #test value for overdispersion
+```
+
+-   The chi-squared statistic value is 0 \< 0.05 which means the null hypothesis can be rejected. thereby, implying that the overdispersion exists. As a result, I run a quasi Poisson regression model.
+
+-   However, the coefficient of femininity variable is not statistically significant as p-value \> 0.05.
+
+```{r,echo=FALSE}
+mod2 <- glm(alldeaths~MasFem,family=quasipoisson,data=df)
+summary(mod2)
+```
+
+#### c) Reproduce Model from the paper
+
+```{r}
+df2 <- df %>% mutate_at(c('MasFem', 'NDAM', 'MinPressure_before'), ~(scale(.) %>% as.vector))
+mod3 <- glm.nb(alldeaths ~ MinPressure_before + NDAM + MasFem + MasFem*MinPressure_before + MasFem*NDAM, data = df2)
+summary(mod3)
+
+#glm.nb(formula = alldeaths ~ min_pressure_before + ndam + mas_fem +   mas_fem * min_pressure_before + mas_fem * ndam, data = df, init.theta = 0.8112499791, link = log)
+```
+
+**the estimated effect of femininity on deaths assuming a hurricane with median pressure and damage ratings**
+
+```{r}
+net_effect = (0.1723+0.3948 + 0.7051)
+net_effect
+```
+
+Therefore, if we keep the pressure and damage ratings constant, for one unit increase in femininity the expected death count would change by log of 1.2722.
+
+#### d) Using Model 4, predict the number of deaths caused by Hurricane Sandy. Interpret your results.
+
+```{r}
+death_sandy <- df2 |> filter(Name == 'Sandy')
+predicted_death <- predict(mod3, death_sandy, type = "link")
+print(predicted_death)
+```
+
+The model predicts that approximately 10 deaths by the hurricane Sandy, whereas the actual deaths in the data are 159. It is one of the outlier values of deaths, as can be seen from "Plot 1: of deaths factored by feminity". Therefore, the model is not appropriate in predicting outlier values.
+
+#### e) Describe at least two strengths and two weaknesses of this paper, focusing on the archival analysis. What was done well? What needed improvement?
+
+**Strengths** One of the strengths of the paper is that the authors perform statistical analysis well, while there are limitations, with the available data and rigorously justified their approaches, for instance, they considered using different count models for model building before finally choosing the negative binomial model. Additionally, the paper is reproducible and the analysis is verifiable as the authors have publicly shared the data and model building approach. Lastly, by conducting this research, the authors have made an important point for practitioners to reconsider how hurricanes are named and communicated to the masses.
+
+**Weakness** There are various limitations in the paper. First, their model does not take into account factors that influence the likelihood of people getting influenced by hurricanes, for instance population of an area, the route of hurricane, width of hurricane, etc. While some of the data might not have been available, data about the base population around the hurricane could have been included as an offset variable in the model. Additionally, there might have been temporal factors influencing the death rates, such as population changes over the years, development of better infrastructure to cope up with hurricanes, etc. Even with the data considered- the coefficient of the MFI index variable is not statistically significant (As p-value \< 0.05), so the authors' reasoning about the effect of gendered names on protective action does not seem appropriate. Further, the authors have not established the mechanism behind their claim- severe storms with more feminine names are deadlier. Moreover, there is no option of naming a hurricane as neutral, i.e. neither feminine nor masculine. I am curious why a 5-point likert scale was not considered for coding the MFI index, as opposed to using the scale adopted by authors (1 = very masculine, 11 = very feminine, and 1 = very man-like, 11 = very woman-like). Lastly, there is no mention of power analysis and effect size by the authors.
+
+#### f) Are you convinced by the results? If you are, explain why. If you're not, describe what additional data and/or analyses you would like to see to further test the author's hypothesis.
+
+I am not convinced by the results because of the aforementioned limitations. I would like to see data for safety infrastructure like storm shelters and population of an area, along with more meteorological information such as the route of hurricane, width of hurricane. Lastly, I would like to see a more rigorous analysis for the author's hypothesis "individuals systematically underestimate their vulnerability to hurricanes with more feminine names, avoiding or delaying protective measures", however due to limited statistical and meteorological knowledge I am not sure of the correct toolkit to test it- perhaps, causal inference models may help.
+
+# Q3 Vaccinations
+
+```{r, include=FALSE}
+data <- read.csv(file = 'COVID-19_Vaccinations_in_the_United_States_County.csv', header = TRUE)
+data_dic <- read_excel("DataDictionary_v36_12082022.xlsx", sheet=6)
+acs_wide <- read.csv(file = 'acs.csv', header = TRUE)
+```
+
+```{r, include=FALSE}
+#filter data from the 11th of January 2023
+data$Date <- as.Date(data$Date, "%m/%d/%Y")
+
+vacc <- data |> filter(data$Date > '2023-01-10') #
+vacc$FIPS <- as.integer(vacc$FIPS)
+
+vacc <- vacc %>% dplyr::select(Date, FIPS, MMWR_week, Recip_County, Recip_State, Completeness_pct, starts_with("Series_Complete"), Metro_status)
+
+acs <- acs_wide |> mutate(fips = as.integer(fips)) |> pivot_wider(names_from = variable,values_from = value)
+
+#join the datasets
+combined <-left_join(vacc, acs, by=c("FIPS" = "fips"))
+```
+
+**Data cleaning**
+
+-   Clean data by removing NAs, converting character columns to integer, and by picking observation of most recent date (so we don't need to deal with temporal component in the model).
+
+### a) EDA
+
+```{r, include=FALSE}
+combined <- combined |> filter(Date == '2023-02-01') 
+```
+
+```{r, include=FALSE}
+#clean and change variable formats
+combined <- combined |> drop_na()
+combined$Series_Complete_18Plus <- as.integer(combined$Series_Complete_18Plus)
+combined$Series_Complete_Yes <- as.integer(combined$Series_Complete_Yes)
+```
+
+-   The summary function helped me see the type of variables in the data, their central values. It is interesting to note that there are no significant outliers in the Series_Complete_18Plus population, as the max value is not too far from the 3rd quartile value of the variable.
+
+```{r, include=FALSE}
+print(summary(combined)) 
+```
+
+```{r, echo=FALSE, results='hide',message=FALSE, warning=FALSE, fig.show='hide'}
+eda2 <- combined |> 
+  dplyr::select((Series_Complete_5PlusPop_Pct), Series_Complete_12PlusPop_Pct, Series_Complete_5to17Pop_Pct, Series_Complete_18PlusPop_Pct, Series_Complete_65PlusPop_Pct) 
+  
+cols_names <- colnames(eda2)
+
+eda2 <- eda2 |> pivot_longer( cols= cols_names ,names_to= "Pop_type", values_to = "value")
+```
+
+-   The box plot shows the percent of people of different age groups who have completed a primary vaccination series. It is interesting to note that the median is the highest for 65+ age category, whereas it is lowest for 5 to 17 age category. For 18+ population percentage there are various outlier values too, which implies that the association of age with vaccination rate is not the same across all the counties. Hence, median_age has been taken as a predictor variable in the model.
+
+```{r, echo=FALSE}
+ggplot(data = eda2, aes(y= value, fill= factor(Pop_type))) + 
+    geom_boxplot() +
+    labs(y = "Population percent", title = "Percent of people who completed primary vaccination series for various age categories type") +
+    theme_minimal()
+```
+
+```{r, include = FALSE}
+#prepare data to plot a heat map.
+hm <- combined |> dplyr::select(Series_Complete_18PlusPop_Pct, prop_white, median_income, median_rent,  prop_less_than_hs, prop_bachelor_above, prop_low_ratio_ip) 
+
+cor1 <- round(cor(hm, method = "pearson", use = "pairwise.complete.obs"),2) 
+cols_names <- colnames(data.frame(cor1))
+cor_df <- data.frame(var1 = row.names(cor1), cor1)
+cordf <- cor_df |> pivot_longer(cols_names, names_to= "var2", values_to = "value")
+```
+
+```{r, warning=FALSE}
+ggplot(data = cordf, aes(x=var1, y=var2, fill=value)) + 
+  geom_tile() + 
+  #scale_fill_distiller(palette = "RdPu") +
+  scale_fill_gradient(low="white", high="blue") +
+  theme(axis.text.x = element_text(angle = 90))+ 
+  labs(title = "Heatmap of correlation values") +
+  xlab("")+ ylab("")
+```
+
+From the heat plot we can see some interesting and intuitive patterns like:
+
+-   prop_less_than_hs shows weakly negative correlation with the Series_Complete_18Plus variable. Intuitively, it means that lesser educated popluation are lesser likely to be vaccinated.
+
+-   Median income(median_income), median rent (median_rent) and proportion of people who completed bachelor or above education (prop_bachelor_above) are strongly positively correlated to each other and negatively correlated to prop_low_ratio_ip.
+
+-   Proportion of white (prop_white) people is weakly negatively correlated with the 18+ population who have completed vaccination series.
+
+The histogram below shows that 'Series_Complete_18PlusPop_Pct' is normally distributed.
+
+```{r, echo=FALSE, results='hide',message=FALSE, warning=FALSE}
+ggplot(data = combined) + 
+  geom_histogram(aes(x = Series_Complete_18PlusPop_Pct , fill= Metro_status ), position = position_dodge()) +theme_light()
+```
+
+```{r,include=FALSE, fig.show='hide'}
+ggplot(data = combined, mapping = aes(x = (Metro_status), y = Series_Complete_18PlusPop_Pct )) + 
+  geom_point() 
+```
+
+```{r, include=FALSE,fig.show='hide'}
+ggplot(data = combined, aes(x= prop_low_ratio_ip, y= Series_Complete_18PlusPop_Pct)) + 
+  geom_point() + 
+  geom_smooth(method=lm, se=TRUE)+
+  facet_grid(~Metro_status)+
+  theme_light()
+
+```
+
+-   The pattern for 'median_age' variable below looks different, especially the slopes differ substantially, for both Metro and non-metro counties, so interaction term would be added in the model. Intuitively, it means that people of the similar age would be influenced by whether they are located in non-metro or metro location, say due to the presence of more awareness or vaccination infrastructure in a metro county.
+
+```{r,echo=FALSE, results='hide',message=FALSE, warning=FALSE}
+ggplot(data = combined, aes(x= median_age, y= Series_Complete_18PlusPop_Pct)) + 
+  geom_point() + 
+  geom_smooth(method=lm, se=TRUE)+ 
+  facet_grid(~Metro_status)+
+  theme_light()+
+  labs(title = "Plot of percentage of 18+  people who completed primary vaccine series and median age- contrasted with Metro and non-metro county")
+
+```
+
+```{r, include=FALSE, echo=FALSE, results='hide',message=FALSE, warning=FALSE}
+
+ggplot(data = combined, aes(x= median_income, y= Series_Complete_18PlusPop_Pct)) + 
+  geom_point() + 
+  geom_smooth(method=lm, se=TRUE)+
+  facet_grid(~Metro_status)+
+  theme_light() +
+  labs(title = "Plot of percentage of 18+  people who completed primary vaccine series and median income- contrasted with Metro and non-metro county")
+```
+
+```{r, include=FALSE, echo=FALSE, warning=FALSE}
+ggplot(data = combined, aes(x= prop_white, y= Series_Complete_18PlusPop_Pct)) + 
+  geom_point() + 
+  geom_smooth(method=lm, se=TRUE)+ 
+  facet_grid(~Metro_status)+
+  theme_light() +
+  labs(title = "Plot of percentage of 18+  people who completed primary vaccine series and proportion of white in a county- contrasted with Metro and non-metro county")
+
+```
+
+### b) Model Building
+
+**distributional assumptions about the outcome measure** - I have used a poisson model as each data point yi can equal 0, 1, 2,..., and the Poisson model is used for count data if no overdispersion would exist. I will use the (quasi)Poisson model, instead of the binomial model for count data because each data point yi does not have a natural limit and it is not based on a number of independent trials. - While the mean and variance of the 'Series_Complete_18Plus' variable are not equal, I have still used the poisson distribution instead of negative binomial distribution for simplicity and due to prior experience with poisson regression model.
+
+**consideration for covariates**
+
+-   Based on the EDA, prop_low_ratio_ip and median_income are strongly correlated, therefore only 1 of them (median_income) has been taken into the model to avoid multicollinearity problems.
+
+-   Further, interaction terms were added in the model based on whether the slopes differed substantially when plotted with the variable of interest (as shown in the EDA section).
+
+-   prop_less_than_hs variable was included as people who are less educated are expected to have less awareness and belief in vaccinations, which also seems justified by its negative correlation with the Series_Complete_18Plus variable.
+
+-   Recip_State has been used as it would help control various fixed effects across counties within a particular state, such as vaccination centers, political inclinations of people of the state etc.
+
+-   Metro variable is taken into account as an interaction term as explained in EDA. It has not been taken into account separately as its effects would be incorporated through the state variable.
+
+```{r, include=TRUE}
+combined <- combined |> drop_na()
+combined$Series_Complete_18Plus <- as.integer(combined$Series_Complete_18Plus)
+```
+
+```{r}
+mean(combined$Series_Complete_18Plus, na.rm = TRUE)
+var = (sd(combined$Series_Complete_18Plus, na.rm = TRUE))^2
+print(var)
+```
+
+```{r, include=FALSE}
+modQ3_1 <- glm(Series_Complete_18Plus ~ 1, family=poisson, data = combined, offset = log(total_pop_18plus) )
+summary(modQ3_1) #the offset controls for exposure to risk/making inferences to some baseline, therefore population size
+##offsets are independent of x. lets say more people are educated or higher income. some indication of likelihood of people to be affected by hurricane.
+
+
+modQ3_2 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status), family=poisson, data = combined, offset = log(total_pop_18plus))
+summary(modQ3_2) # Compared to the baseline category 1 (Metro), we see that category 2 (non-metro) has 19% more vaccinated 18+, in proportion to population rates.
+
+modQ3_3 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_income , family=poisson, data = combined, offset = log(total_pop_18plus))
+summary(modQ3_3) # there is some decrease in the residual deviance from the previous model (around 100 units), and all the coefficient estimates are still statistically significant
+```
+
+-   find out the overdispersion
+
+```{r}
+n = dim(combined)[1] #119
+k = length(modQ3_3$coefficients) # k=3
+sum(rstandard(modQ3_3)^2)/(n-k) # overdispersion factor 
+1- pchisq(sum(rstandard(modQ3_3)^2), n-k) #test value for overdispersion
+```
+
+-   overdispersion exists so I switched to quasipoisson models. While Poisson models assumes equal variances and mean, running a quasi-poisson model is also better because it assumes variance is proportional to the mean.
+
+**Model training approach**
+
+-   I have used a forward training approach with multiple iterations of adding/deleting variables. I have looked at whether the covariates are statistically significant or not, when considered into the model. I included (excluded) a variable in the model if it reduced (increased) the value of Residual deviance and AIC. To take into account the base population of each county and study the rate, instead of count, I have introduced an offset control "total_pop_18plus".
+
+```{r , include=FALSE}
+modQ3_4 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_income , family=quasipoisson, data = combined, offset = log(total_pop_18plus))
+summary(modQ3_4) # the residual deviance is same. but the statistical significance of coeff decreases. 
+
+modQ3_5 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_income + Metro_status*median_income , family=quasipoisson, data = combined, offset = log(total_pop_18plus))
+summary(modQ3_5) # the residual deviance reduces but all the coefficients are insignificant
+
+# no-interaction term
+modQ3_6 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_income + prop_white , family=quasipoisson, data = combined, offset = log(total_pop_18plus)) #significant reduction of residual variance to 5380.5 
+summary(modQ3_6)
+
+modQ3_7 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_income + prop_white + prop_low_ratio_ip , family=quasipoisson, data = combined, offset = log(total_pop_18plus)) #significant reduction of residual variance to 5380.5 
+summary(modQ3_7) #significant reduction of residual variance to  5149.5 
+
+modQ3_8 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_income + prop_white + prop_low_ratio_ip , family=poisson, data = combined, offset = log(total_pop_18plus)) #significant reduction of residual variance to 5380.5 
+summary(modQ3_8) 
+
+modQ3_9 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_income*Metro_status  + median_income + prop_white + prop_low_ratio_ip , family=poisson, data = combined, offset = log(total_pop_18plus)) 
+summary(modQ3_9)
+
+modQ3_10 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + median_age*Metro_status + median_income*Metro_status  + median_income + prop_white + prop_low_ratio_ip , family=poisson, data = combined, offset = log(total_pop_18plus)) 
+summary(modQ3_10)
+
+modQ3_11 <- glm(Series_Complete_18Plus ~ as.factor(Metro_status) + prop_white*Metro_status + median_age*Metro_status + median_income*Metro_status  + median_income + prop_white + prop_low_ratio_ip , family=poisson, data = combined, offset = log(total_pop_18plus)) 
+summary(modQ3_11) 
+```
+
+```{r}
+modQ3_13 <- glm(Series_Complete_18Plus ~  as.factor(Recip_State) + median_age*Metro_status + median_income + prop_white + prop_less_than_hs , family=poisson, data = combined, offset = log(total_pop_18plus)) 
+summary(modQ3_13) 
+```
+
+**Interpretation of model**
+
+-   The coefficients of most of the states are statistically significant, which implies that the state in which a county lies affects the population of 18+ people who complete vaccination. this is intuitive as the characteristics of state, like the infrastructure or state government's policies, would influence people's choice to get vaccinated.
+
+-   If the income in a county were to increase by one point, the difference in the log of expected 18+ people who completed vaccination series would change by 6.774e-06, while holding other variables in the model constant.
+
+-   If the proportion of white population in a county were to increase by one point, the difference in the log of expected 18+ people who completed vaccination series would change by -4.309e-01, while holding other variables in the model constant.
+
+-   The median age of the population also influence the people who complete vaccination series, and the effect interacts with whether the county is metro or non-metro. The coefficient of the interaction term (7.972e-03) represents the difference in slopes for the median_age, comparing with metro nature of the county.
+
+### c) Use your model to predict the proportion of the population aged 18+ in Ada County, Idaho who are vaccinated. Briefly discuss how good you think this prediction is, and why.
+
+```{r, echo=FALSE, warning=FALSE}
+adacounty <- combined |> filter(Recip_County == 'Ada County')
+predicted_count <- predict(modQ3_13, adacounty, type = "response")
+print(predicted_count)
+predict(modQ3_13, adacounty, type = "response", se.fit = TRUE)
+actual_per <- (adacounty$Series_Complete_18PlusPop_Pct/100)*adacounty$total_pop_18plus
+print(actual_per)
+```
+
+-   the model predicts 211465.9 people of 18+ to be vaccinated, whereas the observed data shows 267230 people of 18+ to be vaccinated. The SE of the model is 10770.15. I believe that the model made a bad prediction as the actual value does not lie within 2 standard deviations, neither within 3 sd, of the estimate.
+
+```{r, include= FALSE}
+print(211465.9 + 4*10770.15)
+```
+
+### d) Give a brief summary of your analysis. What other variables may be of interest to investigate in future?
+
+To sum up, I find various demographic variables influenced the vaccination rates. For instance, people with higher income were more likely to be vaccinated than the ones with lower income. Also, the higher the median age in the county more likely it would be vaccinated. People who were educated less than high school were had a negative association with the 18+ vaccination population. More the proportion of whites in a county, the lesser likely would be the rate of vaccination.
+
+Further, the model can be trained to give better estimates. To strengthen the mnodel for future analysis, I would like to gather and understand the effect of non-demographic information such as--
+
+-   details about vaccination centers (the density or total number) in a county/ state
+
+-   political affiliation of people in a given state.
+
+-   the price of vaccines in different states (This may vary as the tax rate, government subsidies may vary for different states)
+
+### e) Now consider the situation of analysing vaccination rates at the **state** level.
+
+-   For regression 1), the granularity of the outcome variable and covariates would be lower than our model in part b. However, this may not necessarily be problematic, as such level of granularity might be appropriate based on the research questions being studied.
+-   For regression 2), the outcome variable won't be a count variable, as it won't vary in discrete fixed intervals. Therefore, to make it a count variable to use poisson distribution, we would need to transform it, say by rounding it-off, due to which we would lose some information. Thereby, the granularity would be lower of the outcome measure. Further, we would loose significant information in aggregating information from county to state level in other covariates.
+-   For regression 3- it would provide much better granularity of information, as compared to cases 1 and 2. Incorporating the fixed effect helps us account for likely time-invariant characteristics of the state that would vaccination rate; For instance, the categorical variable of state helps us to account when there are more vaccination centers in certain states as opposed to other states, which we doesn't get reflected in our census data. At the same time, when we study research questions that are about understanding different counties within a particular state we may choose to ignore the fixed-effect of state based on the assumption that the state in consideration has uniformly distributed characteristics (like vaccination centers) across the counties within it. So, ultimately the choice of variables depend on the question being asked.
