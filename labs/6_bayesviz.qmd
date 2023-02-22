@@ -166,6 +166,7 @@ set.seed(1856)
 y <- ds$log_weight
 yrep1 <- extract(mod1)[["log_weight_rep"]]
 yrep2 <- extract(mod2)[["log_weight_rep"]] 
+dim(yrep1)
 samp100 <- sample(nrow(yrep1), 100)
 ppc_dens_overlay(y, yrep1[samp100, ])  + ggtitle("distribution of observed versus predicted birthweights")
 ```
