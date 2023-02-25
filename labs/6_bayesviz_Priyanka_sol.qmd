@@ -140,9 +140,6 @@ $$
 \log(y_i) \sim N(\beta_1 + \beta_2\log(x_i), \sigma^2)
 $$ Use these values to simulate (log) birth weights from the likelihood specified in Model 1, based on the set of observed gestational weights.
 
--   Plot the resulting distribution of simulated (log) birth weights.
--   Plot ten simulations of (log) birthweights against gestational age.
-
 ```{r, include=FALSE}
 set.seed(182)
 nsims <- 1000
@@ -158,18 +155,29 @@ for(i in 1:nsims){
 }
 
 dsl <- dsims %>% 
-  pivot_longer(`1`:`10`, names_to = "sim", values_to = "sim_weight")
+  pivot_longer(`1`:`1000`, names_to = "sim", values_to = "sim_weight")
 
 ```
 
 ```{r}
 dsl %>% 
   ggplot(aes(sim_weight)) + geom_histogram(aes(y = ..density..), bins = 200, fill = "turquoise", color = "black") + 
-  #geom_vline(xintercept = log(60), color = "purple", lwd = 1.2, lty = 2) + 
-  theme_bw(base_size = 16) #+ 
-  #annotate("text", x=7, y=0.2, label= "Monica's\ncurrent weight", color = "purple", size = 5)
+  ggtitle("Distribution of simulated (log) birthweights") +
+  theme_bw(base_size = 16)  
+```
+-   Plot ten simulations of (log) birthweights against gestational age.
+```{r, include=FALSE}
+sim10 <- dsl |> filter(sim %in% (1:10) ) 
 ```
 
+```{r, echo=FALSE, warning=FALSE}
+sim10 %>% 
+  ggplot(aes(log_gest_c, sim_weight, color = factor(sim))) + 
+  geom_point() + geom_smooth(method = "lm") + 
+  scale_color_brewer(palette = "Set1") + 
+  theme_bw(base_size = 14) + 
+  ggtitle("10 simulations of (log) birthweight v gestational age")
+```
 # Run the model
 
 Now we're going to run Model 1 in Stan. The stan code is in the `code/models` folder. First, get our data into right form for input into stan.
@@ -299,7 +307,7 @@ dr %>%
   scale_color_manual(name = "", 
                      values = c("y" = "darkblue", 
                                 "y_rep" = "lightblue")) + 
-  ggtitle("Distribution of observed and replicated birthweights") + 
+  ggtitle("distribution of observed, replicated birthweights Model2") +
   theme_bw(base_size = 16)
 ```
 
@@ -409,42 +417,50 @@ model3 <- stan(data = stan_data3,
 summary(model3)$summary[c(paste0("beta[", 1:5, "]"), "sigma"),]
 ```
 
-### PPC for Model 3
+### PPC 
 
+**for Model 3**
 ```{r, echo=FALSE}
 set.seed(1856)
 y <- ds$log_weight
 yrep3 <- extract(model3)[["log_weight_rep"]]
 samp100 <- sample(nrow(yrep3), 100) #sampling 100 random ones
 #dim(yrep3) # 3842 observations = N . for each of those i have a 1000 posterior predictive samples. #1000 = 4chains * 250. those other 250 are burn off due to warm up
-ppc_dens_overlay(y, yrep3[samp100, ]) + ggtitle("distribution of observed versus predicted birthweights")
+ppc_dens_overlay(y, yrep3[samp100, ]) + ggtitle("M3-distribution of observed versus predicted birthweights")
+```
+- The distribution of observed versus predicted birthweights for model 3 is similar to model 2 
+```{r, echo=FALSE}
+set.seed(1856)
+y <- ds$log_weight
+yrep2 <- extract(mod2)[["log_weight_rep"]] 
+samp100 <- sample(nrow(yrep2), 100) #sampling 100 random ones
+#dim(yrep1) # 3842 observations = N . for each of those i have a 1000 posterior predictive samples. #1000 = 4chains * 250. those other 250 are burn off due to warm up
+ppc_dens_overlay(y, yrep2[samp100, ]) + ggtitle("M2-distribution of observed versus predicted birthweights")
 ```
 
 ```{r}
-ppc_stat_grouped(ds$log_weight, yrep3, group = ds$preterm, stat = 'median')
+ppc_stat_grouped(ds$log_weight, yrep3, group = ds$preterm, stat = 'median') +ggtitle("PPC Model3-Median")
 ```
+
+```{r}
+ppc_stat_grouped(ds$log_weight, yrep2, group = ds$preterm, stat = 'median')+ggtitle("PPC Model2-Median")
+```
+- Both the simulated model 2 and model 3 do not contain the actual median of the observed data. So it is tough to say which is a better model.
 
 ```{r}
 loglik3 <- extract(model3)[["log_lik"]]
 loglik2 <- extract(mod2)[["log_lik"]]
 ```
 
-And then we can use these in the `loo` function to get estimates for the elpd. Note the `save_psis = TRUE` argument saves the calculation for each simulated draw, which is needed for the LOO-PIT calculation below.
-
 ```{r, warning=FALSE}
 loo3 <- loo(loglik3, save_psis = TRUE)
 loo2 <- loo(loglik2, save_psis = TRUE)
 ```
-
-Look at the output:
 
 ```{r}
 loo3
 loo2
 ```
 
-Comparing the two models tells us Model 3 is better:
+Comparing the two models tells us Model 3 is better because the elpd_loo estimate of model3 is higher(1584.8) than model2 (1552.8).
 
-```{r}
-loo_compare(loo3, loo2)
-```
