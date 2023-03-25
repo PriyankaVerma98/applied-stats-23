@@ -1,0 +1,373 @@
+---
+title: "Week 10: Temporal data"
+subtitle: "Priyanka Verma"
+output: "pdf"
+date: today
+date-format: "DD/MM/YY"
+format: pdf
+execute: 
+  warning: false
+  message: false
+---
+
+# Child mortality in Sri Lanka
+
+In this lab you will be fitting a couple of different models to the data about child mortality in Sri Lanka, which was used in the lecture. Here's the data and the plot from the lecture:
+
+```{r, include = FALSE}
+library(tidyverse)
+library(here)
+library(rstan)
+library(tidybayes)
+library(readr)
+```
+
+```{r, echo=FALSE}
+urlfile = "https://raw.githubusercontent.com/MJAlexander/applied-stats-2023/main/data/lka.csv"
+#lka <- read_csv(here("data/lka.csv"))
+lka <- read_csv(url(urlfile))
+ggplot(lka, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se,
+                  ymax = logit_ratio + se,
+                  fill =  source), alpha = 0.1) +
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged), Sri Lanka", y = "log ratio")
+```
+
+# Fitting a linear model 
+
+Let's firstly fit a linear model in time to these data. Here's the code to do this:
+
+```{r, include=FALSE}
+observed_years <- lka$year
+years <- min(observed_years):max(observed_years)
+nyears <- length(years)
+
+stan_data <- list(y = lka$logit_ratio, year_i = observed_years - years[1]+1, 
+                  t = nyears, years = years, N = length(observed_years), 
+                  mid_year = mean(years), se = lka$se)
+```
+
+```{r, include=FALSE}
+#path = "~/Desktop/STA-2201/applied-stats-23/code/models/lka_linear_me.stan"
+mod <- rstan::stan(data = stan_data, file = ("~/Desktop/STA-2201/applied-stats-23/code/models/lka_linear_me.stan"))
+```
+
+Extract the results:
+
+```{r, include=FALSE}
+res <- mod %>% 
+  gather_draws(mu[t]) %>% # expected value of logit ratio
+  median_qi() %>% 
+  mutate(year = years[t])
+```
+
+```{r, include=FALSE}
+res
+```
+
+
+Plot the results:
+```{r, echo=FALSE}
+ggplot(lka, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se, 
+                  ymax = logit_ratio + se, 
+                  fill =  source), alpha = 0.1) + 
+  theme_bw()+
+  geom_line(data = res, aes(year, .value)) + 
+  geom_ribbon(data = res, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged), Sri Lanka",
+       y = "log ratio", subtitle = "Linear fit shown in black")
+```
+
+## Question 1
+
+Project the linear model above out to 2023 by adding a `generated quantities` block in Stan (do the projections based on the expected value $\mu$). Plot the resulting projections on a graph similar to that above. 
+
+```{r, include=FALSE}
+stan_data <- list(y = lka$logit_ratio, year_i = observed_years - years[1]+1, 
+                  t = nyears, years = years, N = length(observed_years), 
+                  mid_year = mean(years), se = lka$se, P=9)
+```
+
+```{r,  include=FALSE}
+mod2 <- rstan::stan(data = stan_data, file = ("~/Desktop/STA-2201/applied-stats-23/code/models/10_temporal.stan"))
+```
+
+```{r,include=FALSE}
+#mod
+
+res2 <- mod2 %>% 
+  gather_draws(mu[t]) %>% # expected value of logit ratio
+  median_qi() %>% 
+  mutate(year = years[t])
+
+res_p2 <- mod2 |> gather_draws(mu_p[p])|>
+  median_qi() |>
+  mutate(year = years[nyears]+p)
+```
+
+
+```{r, echo=FALSE}
+ggplot(lka, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se, 
+                  ymax = logit_ratio + se, 
+                  fill =  source), alpha = 0.1) + 
+  theme_bw()+
+  geom_line(data = res2, aes(year, .value)) + 
+  geom_ribbon(data = res2, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  geom_line(data = res_p2, aes(year, .value), col= "red") + 
+  geom_ribbon(data = res_p2, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "red")+
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged), Sri Lanka",
+       y = "log ratio", subtitle = "Linear fit shown in black")
+
+```
+
+# Random walks
+
+
+## Question 2
+
+Code up and estimate a first order random walk model to fit to the Sri Lankan data, taking into account measurement error, and project out to 2023. 
+
+```{r, include=FALSE}
+mod3 <- rstan::stan(data = stan_data, file = ("~/Desktop/STA-2201/applied-stats-23/code/models/10_RW1.stan"))
+```
+
+```{r, include=FALSE}
+#mod
+res3 <- mod3 %>% 
+  gather_draws(mu[t]) %>% # expected value of logit ratio
+  median_qi() %>% 
+  mutate(year = years[t])
+
+res_p3 <- mod3 |> gather_draws(mu_p[p])|>
+  median_qi() |>
+  mutate(year = years[nyears]+p)
+```
+
+```{r, echo= FALSE}
+ggplot(lka, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se, 
+                  ymax = logit_ratio + se, 
+                  fill =  source), alpha = 0.1) + 
+  theme_bw()+
+  geom_line(data = res3, aes(year, .value)) + 
+  geom_ribbon(data = res3, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  geom_line(data = res_p3, aes(year, .value), col= "red") + 
+  geom_ribbon(data = res_p3, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "red")+
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged), Sri Lanka",
+       y = "log ratio", subtitle = "RW1 fit shown in black, projections in red")
+
+#non-stationary variance .. increasing uncertainity over time. 
+```
+
+## Question 3
+
+Now alter your model above to estimate and project a second-order random walk model (RW2). 
+```{r, include=FALSE}
+stan_data <- list(y = lka$logit_ratio, year_i = observed_years - years[1]+1, 
+                  t = nyears, years = years, N = length(observed_years), 
+                  mid_year = mean(years), se = lka$se, P=9)
+```
+
+```{r, include=FALSE}
+mod4 <- rstan::stan(data = stan_data, file = ("~/Desktop/STA-2201/applied-stats-23/code/models/10_RW2.stan"))
+```
+
+```{r, include=FALSE}
+#mod
+res4 <- mod4 %>% 
+  gather_draws(mu[t]) %>% # expected value of logit ratio
+  median_qi() %>% 
+  mutate(year = years[t])
+
+res_p4 <- mod4 |> gather_draws(mu_p[p])|>
+  median_qi() |>
+  mutate(year = years[nyears]+p)
+```
+
+```{r, echo=FALSE}
+ggplot(lka, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se, 
+                  ymax = logit_ratio + se, 
+                  fill =  source), alpha = 0.1) + 
+  theme_bw()+
+  geom_line(data = res4, aes(year, .value)) + 
+  geom_ribbon(data = res4, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  geom_line(data = res_p4, aes(year, .value), col= "red") + 
+  geom_ribbon(data = res_p4, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "red")+
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged), Sri Lanka",
+       y = "log ratio", subtitle = "RW2 fit shown in black, projections in red")
+
+#non-stationary variance .. increasing uncertainity over time. 
+```
+
+
+## Question 4
+
+Run the first order and second order random walk models, including projections out to 2023. Compare these estimates with the linear fit by plotting everything on the same graph. 
+```{r, echo=FALSE}
+ggplot(lka, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se, 
+                  ymax = logit_ratio + se, 
+                  fill =  source), alpha = 0.1) + 
+  theme_bw()+
+  geom_line(data = res4, aes(year, .value), col= "red") + 
+  geom_ribbon(data = res4, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  geom_line(data = res_p4, aes(year, .value), col= "red") + 
+  geom_ribbon(data = res_p4, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "red")+
+  theme_bw()+
+  geom_line(data = res3, aes(year, .value), col= "blue") + 
+  geom_ribbon(data = res3, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  geom_line(data = res_p3, aes(year, .value), col= "blue") + 
+  geom_ribbon(data = res_p3, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "blue")+
+  theme_bw()+
+  geom_line(data = res2, aes(year, .value), col= "green") + 
+  geom_ribbon(data = res2, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  # geom_line(data = res_p2, aes(year, .value), col= "green") + 
+  # geom_ribbon(data = res_p2, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "green")+
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged), Sri Lanka",
+       y = "log ratio", subtitle = "RW2 fit shown in red, RW1 shown in blue, Linear is in green ")
+
+#non-stationary variance .. increasing uncertainity over time. 
+```
+- The fit for linear model is off completely. 
+- RW models predict the data better as compared to linear model. RW2 has more uncertainity around prediction values, however the within data fit is smoother for RW2.
+
+## Question 5
+
+Rerun the RW2 model excluding the VR data. Briefly comment on the differences between the two data situations. 
+
+```{r, include=FALSE}
+lkd_filt <- lka |> filter(lka$source != "VR")
+```
+
+```{r, include=FALSE}
+observed_years <- lkd_filt$year
+years <- min(observed_years):max(observed_years)
+nyears <- length(years)
+```
+
+```{r, include=FALSE}
+stan_data <- list(y = lkd_filt$logit_ratio, year_i = observed_years - years[1]+1, 
+                  t = nyears, years = years, N = length(observed_years), 
+                  mid_year = ceiling(mean(years)), se = lkd_filt$se, P=9)
+```
+
+```{r, include=FALSE}
+mod5 <- rstan::stan(data = stan_data, file = ("~/Desktop/STA-2201/applied-stats-23/code/models/10_RW2.stan"))
+```
+
+```{r, include=FALSE}
+#mod
+res5 <- mod5 %>% 
+  gather_draws(mu[t]) %>% # expected value of logit ratio
+  median_qi() %>% 
+  mutate(year = years[t])
+
+res_p5 <- mod5 |> gather_draws(mu_p[p])|>
+  median_qi() |>
+  mutate(year = years[nyears]+p)
+```
+
+```{r, echo=FALSE}
+ggplot(lkd_filt, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se, 
+                  ymax = logit_ratio + se, 
+                  fill =  source), alpha = 0.1) + 
+  theme_bw()+
+  geom_line(data = res5, aes(year, .value)) + 
+  geom_ribbon(data = res5, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  geom_line(data = res_p5, aes(year, .value), col= "red") + 
+  geom_ribbon(data = res_p5, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "red")+
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged) excluding VR data, Sri Lanka",
+       y = "log ratio", subtitle = "RW2 fit shown in black, projections in red")
+
+#non-stationary variance .. increasing uncertainity over time. 
+```
+- For the context when VR data source is not included, the uncertainity in estimates produced by RW2 model are lesser than the case when RW2 is trained with VR data included. The model fit is also smoother when VR data is excluded. So, the model trained w/o VR data is better. 
+
+## Question 6
+
+Briefly comment on which model you think is most appropriate, or an alternative model that would be more appropriate in this context.
+
+
+```{r, include=FALSE}
+stan_data <- list(y = lkd_filt$logit_ratio, year_i = observed_years - years[1]+1, 
+                  t = nyears, years = years, N = length(observed_years), 
+                  mid_year = ceiling(mean(years)), se = lkd_filt$se, P=9)
+```
+
+```{r, include=FALSE}
+mod6 <- rstan::stan(data = stan_data, file = ("~/Desktop/STA-2201/applied-stats-23/code/models/10_RW1.stan"))
+```
+
+```{r, include=FALSE}
+#mod
+res6 <- mod6 %>% 
+  gather_draws(mu[t]) %>% # expected value of logit ratio
+  median_qi() %>% 
+  mutate(year = years[t])
+
+res_p6 <- mod6 |> gather_draws(mu_p[p])|>
+  median_qi() |>
+  mutate(year = years[nyears]+p)
+```
+
+```{r, echo= FALSE}
+ggplot(lkd_filt, aes(year, logit_ratio)) +
+  geom_point(aes( color = source)) + 
+  geom_line(aes( color = source), lty = 2) + 
+  geom_ribbon(aes(ymin = logit_ratio - se, 
+                  ymax = logit_ratio + se, 
+                  fill =  source), alpha = 0.1) + 
+  theme_bw()+
+  geom_line(data = res6, aes(year, .value)) + 
+  geom_ribbon(data = res6, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2)+
+  geom_line(data = res_p6, aes(year, .value), col= "red") + 
+  geom_ribbon(data = res_p6, aes(y = .value, ymin = .lower, ymax = .upper), alpha = 0.2, fill = "red")+
+  theme_bw()+
+  labs(title = "Ratio of neonatal to other child mortality (logged) excluding VR data, Sri Lanka",
+       y = "log ratio", subtitle = "RW1 fit shown in black, projections in red") 
+
+#non-stationary variance .. increasing uncertainity over time. 
+```
+
+- From comparing the plot of RW2 and RW1, we can see that the predictions of RW2 are more appropriate. The uncertainity in estimates produced by RW2 model are lesser than the case when RW2 is trained with VR data included. The model fit is also smoother when VR data is excluded. So, the model trained w/o VR data is better. 
+
+- Lastly, there are multiple observations in the data for the year 1986, so it might be a good idea to manually choose the data for that year to reduce the uncertainities around that point during model fitting. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
