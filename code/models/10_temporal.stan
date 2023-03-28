@@ -12,7 +12,6 @@ data {
 parameters {
   real alpha;
   real beta;
-
 }
 
 transformed parameters{
@@ -34,6 +33,6 @@ model {
 generated quantities{
   vector[P] mu_p;
   for(i in 1:P){
-    mu_p[i] = alpha + beta*(years[t+i] - mid_year);
+    mu_p[i] = alpha + beta*(years[t]+i  - mid_year);
   }
 }
